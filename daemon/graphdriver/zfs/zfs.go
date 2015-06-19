@@ -220,7 +220,7 @@ func (d *Driver) MountPath(id string) string {
 	return path.Join(d.options.mountPath, "graph", getMountpoint(id))
 }
 
-func (d *Driver) Create(id string, parent string) error {
+func (d *Driver) Create(id string, parent string, isImageLayer bool) error {
 	err := d.create(id, parent)
 	if err == nil {
 		return nil

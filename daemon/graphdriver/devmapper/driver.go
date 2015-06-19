@@ -116,7 +116,7 @@ func (d *Driver) Cleanup() error {
 	return err
 }
 
-func (d *Driver) Create(id, parent string) error {
+func (d *Driver) Create(id, parent string, isImageLayer bool) error {
 	if err := d.DeviceSet.AddDevice(id, parent); err != nil {
 		return err
 	}

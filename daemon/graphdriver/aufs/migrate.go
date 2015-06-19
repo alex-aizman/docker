@@ -79,7 +79,7 @@ func (a *Driver) migrateContainers(pth string, setupInit func(p string) error) e
 				}
 
 				initID := fmt.Sprintf("%s-init", id)
-				if err := a.Create(initID, metadata.Image); err != nil {
+				if err := a.Create(initID, metadata.Image, false); err != nil {
 					return err
 				}
 
@@ -92,7 +92,7 @@ func (a *Driver) migrateContainers(pth string, setupInit func(p string) error) e
 					return err
 				}
 
-				if err := a.Create(id, initID); err != nil {
+				if err := a.Create(id, initID, false); err != nil {
 					return err
 				}
 			}
@@ -146,7 +146,7 @@ func (a *Driver) migrateImage(m *metadata, pth string, migrated map[string]bool)
 			return err
 		}
 		if !a.Exists(m.ID) {
-			if err := a.Create(m.ID, m.ParentID); err != nil {
+			if err := a.Create(m.ID, m.ParentID, true); err != nil {
 				return err
 			}
 		}

@@ -9,18 +9,37 @@ import (
 	"path"
 )
 
-// Return all the directories
+// Return all files inside of given root
 func loadIds(root string) ([]string, error) {
+	return getChilds(root, 1)
+}
+
+func getChildDirs(root string) ([]string, error) {
+	return getChilds(root, 2)
+}
+
+// includeType:
+//	0 - files and directories
+//	1 - only files
+//	2 - only directories
+func getChilds(root string, includeType int) ([]string, error) {
 	dirs, err := ioutil.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
 	out := []string{}
 	for _, d := range dirs {
-		if !d.IsDir() {
-			out = append(out, d.Name())
+		if includeType == 1 && d.IsDir() {
+			continue
 		}
+
+		if includeType == 2 && !d.IsDir() {
+			continue
+		}
+
+		out = append(out, d.Name())
 	}
+
 	return out, nil
 }
 

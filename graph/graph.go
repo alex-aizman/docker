@@ -189,7 +189,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 	}
 
 	// Create root filesystem in the driver
-	if err := graph.driver.Create(img.ID, img.Parent); err != nil {
+	if err := graph.driver.Create(img.ID, img.Parent, false); err != nil {
 		return fmt.Errorf("Driver %s failed to create image rootfs %s: %s", graph.driver, img.ID, err)
 	}
 	// Apply the diff/layer
@@ -327,7 +327,12 @@ func (graph *Graph) walkAll(handler func(*image.Image)) error {
 	if err != nil {
 		return err
 	}
+
 	for _, st := range files {
+		if st.Name() == "_tmp" {
+			continue
+		}
+
 		if img, err := graph.Get(st.Name()); err != nil {
 			// Skip image
 			continue
@@ -345,6 +350,10 @@ func (graph *Graph) walkAll(handler func(*image.Image)) error {
 func (graph *Graph) ByParent() (map[string][]*image.Image, error) {
 	byParent := make(map[string][]*image.Image)
 	err := graph.walkAll(func(img *image.Image) {
+		if img.Parent == "" {
+			return
+		}
+
 		parent, err := graph.Get(img.Parent)
 		if err != nil {
 			return
@@ -366,6 +375,7 @@ func (graph *Graph) Heads() (map[string]*image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	err = graph.walkAll(func(image *image.Image) {
 		// If it's not in the byParent lookup table, then
 		// it's not a parent -> so it's a head!

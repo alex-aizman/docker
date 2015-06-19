@@ -40,7 +40,7 @@ type ProtoDriver interface {
 	String() string
 	// Create creates a new, empty, filesystem layer with the
 	// specified id and parent. Parent may be "".
-	Create(id, parent string) error
+	Create(id, parent string, isImageLayer bool) error
 	// Remove attempts to remove the filesystem layer with this id.
 	Remove(id string) error
 	// Get returns the mountpoint for the layered filesystem referred
@@ -105,6 +105,7 @@ func GetDriver(name, home string, options []string) (Driver, error) {
 }
 
 func New(root string, options []string) (driver Driver, err error) {
+
 	for _, name := range []string{os.Getenv("DOCKER_DRIVER"), DefaultDriver} {
 		if name != "" {
 			logrus.Debugf("[graphdriver] trying provided driver %q", name) // so the logs show specified driver

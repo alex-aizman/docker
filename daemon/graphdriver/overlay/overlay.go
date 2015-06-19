@@ -175,7 +175,7 @@ func (d *Driver) Cleanup() error {
 	return nil
 }
 
-func (d *Driver) Create(id string, parent string) (retErr error) {
+func (d *Driver) Create(id string, parent string, isImageLayer bool) (retErr error) {
 	dir := d.dir(id)
 	if err := os.MkdirAll(path.Dir(dir), 0700); err != nil {
 		return err

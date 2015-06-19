@@ -44,7 +44,7 @@ func (d *Driver) Cleanup() error {
 	return nil
 }
 
-func (d *Driver) Create(id, parent string) error {
+func (d *Driver) Create(id, parent string, isImageLayer bool) error {
 	dir := d.dir(id)
 	if err := system.MkdirAll(filepath.Dir(dir), 0700); err != nil {
 		return err
