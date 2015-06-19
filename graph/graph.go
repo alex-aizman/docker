@@ -32,6 +32,7 @@ import (
 // A Graph is a store for versioned filesystem images and the relationship between them.
 type Graph struct {
 	root    string
+	rootNFS string // The NFS root of "/var/lib/docker/graph" from remote hosts
 	idIndex *truncindex.TruncIndex
 	driver  graphdriver.Driver
 }
@@ -57,19 +58,21 @@ func NewGraph(root string, driver graphdriver.Driver) (*Graph, error) {
 
 	graph := &Graph{
 		root:    abspath,
+		rootNFS: "/opt/docker-graphs-nfs-root",
 		idIndex: truncindex.NewTruncIndex([]string{}),
 		driver:  driver,
 	}
 	if err := graph.restore(); err != nil {
 		return nil, err
 	}
+
 	return graph, nil
 }
 
-func (graph *Graph) restore() error {
-	dir, err := ioutil.ReadDir(graph.root)
+func (graph *Graph) restoreImpl(root string) ([]string, error) {
+	dir, err := ioutil.ReadDir(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var ids = []string{}
 	for _, v := range dir {
@@ -78,6 +81,34 @@ func (graph *Graph) restore() error {
 			ids = append(ids, id)
 		}
 	}
+
+	return ids, nil
+}
+
+func (graph *Graph) restore() error {
+	ids, err := graph.restoreImpl(graph.root)
+	if err != nil {
+		return err
+	}
+
+	dir, err := ioutil.ReadDir(graph.rootNFS)
+	if err != nil {
+		fmt.Printf("Unable to read Graph NFS Root '%s'", graph.rootNFS)
+		return err
+	}
+
+	// Read the mountpoins of remote graphs
+	for _, d := range dir {
+		path := filepath.Join(graph.rootNFS, d.Name())
+		idsTmp, err := graph.restoreImpl(path)
+		if err != nil {
+			fmt.Printf("Unable to restore from '%s'", path)
+			continue
+		}
+
+		ids = append(ids, idsTmp...)
+	}
+
 	graph.idIndex = truncindex.NewTruncIndex(ids)
 	logrus.Debugf("Restored %d elements", len(ids))
 	return nil
@@ -320,11 +351,10 @@ func (graph *Graph) Map() (map[string]*image.Image, error) {
 	return images, nil
 }
 
-// walkAll iterates over each image in the graph, and passes it to a handler.
-// The walking order is undetermined.
-func (graph *Graph) walkAll(handler func(*image.Image)) error {
-	files, err := ioutil.ReadDir(graph.root)
+func (graph *Graph) walkOneImpl(root string, handler func(string, string)) error {
+	files, err := ioutil.ReadDir(root)
 	if err != nil {
+		fmt.Printf("Unable to ReadDir() for '%s'\n", root)
 		return err
 	}
 
@@ -333,14 +363,52 @@ func (graph *Graph) walkAll(handler func(*image.Image)) error {
 			continue
 		}
 
-		if img, err := graph.Get(st.Name()); err != nil {
-			// Skip image
-			continue
-		} else if handler != nil {
-			handler(img)
+		if handler != nil {
+			handler(root, st.Name())
 		}
 	}
+
 	return nil
+}
+
+func (graph *Graph) walkAllImpl(handler func(string, string)) error {
+	// First iterate over the local graph
+	err := graph.walkOneImpl(graph.root, handler)
+	if err != nil {
+		return err
+	}
+
+	// Second iterate over the remote graphs
+	dir, err := ioutil.ReadDir(graph.rootNFS)
+	if err != nil {
+		fmt.Printf("Unable to read Graph NFS Root '%s'\n", graph.rootNFS)
+		return err
+	}
+
+	// Read the mountpoins of remote graphs
+	for _, d := range dir {
+		path := filepath.Join(graph.rootNFS, d.Name())
+		err := graph.walkOneImpl(path, handler)
+		if err != nil {
+			fmt.Printf("Unable to walk over '%s'\n", path)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// walkAll iterates over each image in the graph, and passes it to a handler.
+// The walking order is undetermined.
+func (graph *Graph) walkAll(handler func(*image.Image)) error {
+	return graph.walkAllImpl(func(root string, id string) {
+		img, err := graph.Get(id)
+		if err != nil {
+			return
+		}
+
+		handler(img)
+	})
 }
 
 // ByParent returns a lookup table of images by their parent.
@@ -386,8 +454,15 @@ func (graph *Graph) Heads() (map[string]*image.Image, error) {
 	return heads, err
 }
 
-func (graph *Graph) imageRoot(id string) string {
-	return filepath.Join(graph.root, id)
+func (graph *Graph) imageRoot(targetId string) string {
+	var rootPath = ""
+	graph.walkAllImpl(func(root string, id string) {
+		if id == targetId && rootPath == "" {
+			rootPath = root
+		}
+	})
+
+	return filepath.Join(rootPath, targetId)
 }
 
 // storeImage stores file system layer data for the given image to the
